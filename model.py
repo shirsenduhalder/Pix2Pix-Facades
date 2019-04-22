@@ -66,7 +66,8 @@ class Generator(tf.keras.Model):
 		self.up3 = UpSample(512, 4, apply_dropout=True)
 		self.up4 = UpSample(512, 4)
 		self.up5 = UpSample(256, 4)
-		self.up6 = UpSample(64, 4)
+		self.up6 = UpSample(128, 4)
+		self.up7 = UpSample(64, 4)
 
 		self.last = tf.keras.layers.Conv2DTranspose(cfg.OUTPUT_CHANNELS, (4, 4), strides=2, padding='SAME', kernel_initializer=initializer)
 
@@ -78,8 +79,8 @@ class Generator(tf.keras.Model):
 		x4 = self.down4(x3, training=training)
 		x5 = self.down5(x4, training=training)
 		x6 = self.down6(x5, training=training)
-		x7 = self.down2(x6, training=training)
-		x8 = self.down2(x7, training=training)
+		x7 = self.down7(x6, training=training)
+		x8 = self.down8(x7, training=training)
 
 		x9 = self.up1(x8, x7, training=training)
 		x10 = self.up2(x9, x6, training=training)
@@ -87,7 +88,7 @@ class Generator(tf.keras.Model):
 		x12 = self.up4(x11, x4, training=training)
 		x13 = self.up5(x12, x3, training=training)
 		x14 = self.up6(x13, x2, training=training)
-		x15 = self.up1(x14, x1, training=training)
+		x15 = self.up7(x14, x1, training=training)
 
 		x16 = self.last(x15)
 		x16 = tf.nn.tanh(x16)
@@ -117,3 +118,37 @@ class DownSampleDis(tf.keras.Model):
 		return x
 
 class Discriminator(tf.keras.Model):
+
+	def __init__(self):
+		super(Discriminator, self).__init__()
+		initializer = tf.random_normal_initializer(0., 0.02)
+
+		self.down1 = DownSampleDis(64, 4, False)
+		self.down2 = DownSampleDis(128, 4)
+		self.down3 = DownSampleDis(256, 4)
+
+		self.zero_pad1 = tf.keras.layers.ZeroPadding2D()
+		self.conv = tf.keras.layers.Conv2D(512, (4, 4), strides=1, kernel_initializer=initializer, use_bias=False)
+
+		self.batchnorm1 = tf.keras.layers.BatchNormalization()
+		self.zero_pad2 = tf.keras.layers.ZeroPadding2D()
+		self.last = tf.keras.layers.Conv2D(1, (4, 4), strides=1, kernel_initializer=initializer)
+
+	@tf.contrib.eager.defun
+	def call(self, inp, tar, training):
+		x = tf.concat([inp, tar], axis=-1)
+		x = self.down1(x, training=training)
+		x = self.down2(x, training=training)
+		x = self.down3(x, training=training)
+
+		x = self.zero_pad1(x)
+
+		x = self.conv(x)
+		x = self.batchnorm1(x, training=training)
+
+		x = tf.nn.leaky_relu(x)
+		x = self.zero_pad2(x)
+
+		x = self.last(x)
+
+		return x
